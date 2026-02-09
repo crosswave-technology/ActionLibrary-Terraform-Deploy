@@ -1,0 +1,171 @@
+name: "Terraform AWS Deploy (Plan/Apply)"
+description: "Runs Terraform plan/apply for a single AWS account with standard backend config and artifact handling."
+
+inputs:
+  command:
+    description: "Terraform command: plan or apply"
+    required: true
+  account_id:
+    description: "AWS Account ID"
+    required: true
+  account_name:
+    description: "Human-readable account name"
+    required: true
+  account_group:
+    description: "Account group (used for state path)"
+    required: true
+  environment:
+    description: "Environment type (production, development, etc.)"
+    required: true
+  enable_admin:
+    description: "Enable admin roles for this account"
+    required: false
+    default: "false"
+  config:
+    description: "Additional account configuration (JSON string)"
+    required: false
+    default: "{}"
+
+  aws_region:
+    description: "AWS region"
+    required: false
+    default: "eu-west-1"
+  terraform_version:
+    description: "Terraform version"
+    required: false
+    default: "1.5.7"
+
+  # Backend / variables
+  state_bucket_name:
+    description: "Terraform state bucket name"
+    required: true
+  project_iam_role:
+    description: "Project IAM role name"
+    required: true
+  state_kms_key:
+    description: "KMS key id/arn for backend encryption"
+    required: true
+
+  # Auth / private modules
+  repo_token:
+    description: "Token to access private module repos"
+    required: true
+
+  # Plan artifact
+  plan_artifact_name:
+    description: "Artifact name for the saved plan"
+    required: false
+    default: ""
+  plan_path:
+    description: "Path to the plan file"
+    required: false
+    default: "terraform.plan"
+
+  working_directory:
+    description: "Terraform working directory"
+    required: false
+    default: "."
+
+  # Role names (optional override)
+  plan_role_name:
+    description: "IAM role name to assume for plan"
+    required: false
+    default: "GitHub-Terraform-Plan"
+  apply_role_name:
+    description: "IAM role name to assume for apply"
+    required: false
+    default: "GitHub-Terraform-Apply"
+
+outputs:
+  has_changes:
+    description: "Whether plan detected changes"
+    value: ${{ steps.tf_plan.outputs.has_changes }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Configure Git for Private Modules
+      shell: bash
+      run: |
+        git config --global url."https://x-access-token:${{ inputs.repo_token }}@github.com/".insteadOf "https://github.com/"
+
+    # Assume role depends on command
+    - name: Configure AWS Credentials (plan)
+      if: ${{ inputs.command == 'plan' }}
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::${{ inputs.account_id }}:role/${{ inputs.plan_role_name }}
+        aws-region: ${{ inputs.aws_region }}
+
+    - name: Configure AWS Credentials (apply)
+      if: ${{ inputs.command == 'apply' }}
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::${{ inputs.account_id }}:role/${{ inputs.apply_role_name }}
+        aws-region: ${{ inputs.aws_region }}
+
+    # If apply, pull the plan artifact
+    - name: Download Plan Artifact
+      if: ${{ inputs.command == 'apply' }}
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ inputs.plan_artifact_name != '' && inputs.plan_artifact_name || format('tfplan-{0}', inputs.account_id) }}
+
+    # Terraform Plan
+    - name: Terraform Plan
+      if: ${{ inputs.command == 'plan' }}
+      id: tf_plan
+      uses: crosswave-technology/ActionLibrary-Terraform-Control@master
+      env:
+        TF_VAR_github_details: ${{ toJson(github) }}
+        TF_VAR_account_config: ${{ inputs.config }}
+      with:
+        working-directory: ${{ inputs.working_directory }}
+        command: plan
+        terraform-version: ${{ inputs.terraform_version }}
+        init-args: >-
+          -backend-config="bucket=${{ inputs.state_bucket_name }}"
+          -backend-config="key=state/repository/${{ github.repository_id }}/${{ inputs.account_group }}/${{ inputs.account_id }}/terraform.tfstate"
+          -backend-config="kms_key_id=${{ inputs.state_kms_key }}"
+          -backend-config="region=${{ inputs.aws_region }}"
+          -backend-config="encrypt=true"
+        plan-args: >-
+          -var='account_id=${{ inputs.account_id }}'
+          -var='account_name=${{ inputs.account_name }}'
+          -var='environment=${{ inputs.environment }}'
+          -var='enable_admin_roles=${{ inputs.enable_admin }}'
+          -var='state_bucket_name=${{ inputs.state_bucket_name }}'
+          -var='project_iam_role=${{ inputs.project_iam_role }}'
+        checkov-enabled: "false"
+        comment-on-pr: "false"
+        emit-summary: "true"
+        emit-raw-plan: "true"
+
+    - name: Upload Plan Artifact
+      if: ${{ inputs.command == 'plan' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.plan_artifact_name != '' && inputs.plan_artifact_name || format('tfplan-{0}', inputs.account_id) }}
+        path: ${{ inputs.plan_path }}
+        retention-days: 1
+
+    # Terraform Apply
+    - name: Terraform Apply
+      if: ${{ inputs.command == 'apply' }}
+      uses: crosswave-technology/ActionLibrary-Terraform-Control@master
+      env:
+        TF_VAR_github_details: ${{ toJson(github) }}
+        TF_VAR_account_config: ${{ inputs.config }}
+      with:
+        working-directory: ${{ inputs.working_directory }}
+        command: apply
+        terraform-version: ${{ inputs.terraform_version }}
+        init-args: >-
+          -backend-config="bucket=${{ inputs.state_bucket_name }}"
+          -backend-config="key=state/repository/${{ github.repository_id }}/${{ inputs.account_group }}/${{ inputs.account_id }}/terraform.tfstate"
+          -backend-config="kms_key_id=${{ inputs.state_kms_key }}"
+          -backend-config="region=${{ inputs.aws_region }}"
+          -backend-config="encrypt=true"
+        apply-args: ${{ inputs.plan_path }}
+        auto-approve: "true"
+        emit-summary: "true"
