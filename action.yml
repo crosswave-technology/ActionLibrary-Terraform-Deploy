@@ -115,7 +115,7 @@ runs:
     - name: Terraform Plan
       if: ${{ inputs.command == 'plan' }}
       id: tf_plan
-      uses: crosswave-technology/ActionLibrary-Terraform-Control@master
+      uses: crosswave-technology/ActionLibrary-Terraform-Control@v1.0.0
       env:
         TF_VAR_github_details: ${{ toJson(github) }}
         TF_VAR_account_config: ${{ inputs.config }}
@@ -152,7 +152,7 @@ runs:
     # Terraform Apply
     - name: Terraform Apply
       if: ${{ inputs.command == 'apply' }}
-      uses: crosswave-technology/ActionLibrary-Terraform-Control@master
+      uses: crosswave-technology/ActionLibrary-Terraform-Control@v1.0.0
       env:
         TF_VAR_github_details: ${{ toJson(github) }}
         TF_VAR_account_config: ${{ inputs.config }}
