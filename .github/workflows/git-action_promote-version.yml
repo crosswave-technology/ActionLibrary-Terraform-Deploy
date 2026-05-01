@@ -1,4 +1,4 @@
-name: "GitHub: Promote Version"
+﻿name: "GitHub: Promote Version"
 run-name: "Promote Version: ${{ github.ref_name }}"
 
 permissions:
@@ -17,11 +17,11 @@ on:
       - '**/VERSION'
   workflow_call:
     secrets:
-      NEXUS_APP_ID:
+      GNM_APP_ID:
         required: true
-      NEXUS_AUTOMATION_APP_INSTALLATION_ID:
+      GNM_APP_INSTALLATION_ID:
         required: true
-      NEXUS_AUTOMATION_APP_PRIVATE_KEY:
+      GNM_APP_PRIVATE_KEY:
         required: true
 
 env:
@@ -42,13 +42,13 @@ jobs:
         id: app_token
         shell: bash
         env:
-          APP_ID: ${{ secrets.NEXUS_APP_ID }}
-          APP_INSTALLATION_ID: ${{ secrets.NEXUS_AUTOMATION_APP_INSTALLATION_ID }}
-          APP_PRIVATE_KEY: ${{ secrets.NEXUS_AUTOMATION_APP_PRIVATE_KEY }}
+          APP_ID: ${{ secrets.GNM_APP_ID }}
+          APP_INSTALLATION_ID: ${{ secrets.GNM_APP_INSTALLATION_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.GNM_APP_PRIVATE_KEY }}
         run: |
           set -euo pipefail
           if [ -z "${APP_ID:-}" ] || [ -z "${APP_INSTALLATION_ID:-}" ] || [ -z "${APP_PRIVATE_KEY:-}" ]; then
-            echo "Missing app credentials (NEXUS_APP_ID, NEXUS_AUTOMATION_APP_INSTALLATION_ID, NEXUS_AUTOMATION_APP_PRIVATE_KEY)." >&2
+            echo "Missing app credentials (GNM_APP_ID, GNM_APP_INSTALLATION_ID, GNM_APP_PRIVATE_KEY)." >&2
             exit 1
           fi
           pem_file=$(mktemp)
@@ -194,13 +194,13 @@ jobs:
         id: app_token
         shell: bash
         env:
-          APP_ID: ${{ secrets.NEXUS_APP_ID }}
-          APP_INSTALLATION_ID: ${{ secrets.NEXUS_AUTOMATION_APP_INSTALLATION_ID }}
-          APP_PRIVATE_KEY: ${{ secrets.NEXUS_AUTOMATION_APP_PRIVATE_KEY }}
+          APP_ID: ${{ secrets.GNM_APP_ID }}
+          APP_INSTALLATION_ID: ${{ secrets.GNM_APP_INSTALLATION_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.GNM_APP_PRIVATE_KEY }}
         run: |
           set -euo pipefail
           if [ -z "${APP_ID:-}" ] || [ -z "${APP_INSTALLATION_ID:-}" ] || [ -z "${APP_PRIVATE_KEY:-}" ]; then
-            echo "Missing app credentials (NEXUS_APP_ID, NEXUS_AUTOMATION_APP_INSTALLATION_ID, NEXUS_AUTOMATION_APP_PRIVATE_KEY)." >&2
+            echo "Missing app credentials (GNM_APP_ID, GNM_APP_INSTALLATION_ID, GNM_APP_PRIVATE_KEY)." >&2
             exit 1
           fi
           pem_file=$(mktemp)
@@ -245,14 +245,14 @@ jobs:
 
       - name: Version Management
         id: promote_version
-        uses: crosswave-technology/ActionLibrary-Version-Management@master
+        uses: crosswave-technology/ActionLibrary-Version-Management@v1.0.0
         with:
           pr_number: ${{ needs.discover.outputs.pr_number }}
           version_file: ${{ matrix.version_file }}
           push_changes: false
 
       - name: Create Logs
-        uses: crosswave-technology/ActionLibrary-Create-Log@master
+        uses: crosswave-technology/ActionLibrary-Create-Log@v1.1.2
         if: ${{ needs.discover.outputs.pr_number != '' }}
         with:
           pr_number: ${{ needs.discover.outputs.pr_number }}
@@ -260,7 +260,7 @@ jobs:
           version_file: ${{ matrix.version_file }}
 
       - name: Generate ChangeLog
-        uses: crosswave-technology/ActionLibrary-Generate-Changelog@master
+        uses: crosswave-technology/ActionLibrary-Generate-Changelog@v1.0.0
         if: ${{ needs.discover.outputs.pr_number != '' }}
         with:
           pr_number: ${{ needs.discover.outputs.pr_number }}
